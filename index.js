@@ -2,7 +2,7 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 10000;
-const QRCode = require('qrcode-terminal');
+
 
 const staffList = `📋 *AD-187 NCTH - 21 STAFF*
 1. MICHAEL CAMP BOSS - 056 9162484
@@ -63,7 +63,7 @@ async function startBot() {
 
     if(qr) {
       console.log("QR CODE FOUND - Scan with WhatsApp:");
-      QRCode.generate(qr, { small: true });
+    
       console.log("Or link with Pairing Code - Wait...");
       // Request pairing code after 5 seconds
       setTimeout(async () => {
