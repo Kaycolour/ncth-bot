@@ -1,89 +1,50 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys')
-const express = require('express')
-const QRCode = require('qrcode')
-const P = require('pino')
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-const app = express()
-const PORT = process.env.PORT || 3000
-let qrCodeData = ''
-let isConnected = false
+const staffList = `📋 *AD-187 NCTH CATERING STAFF - 21 STAFF*
+1. MICHAEL (CAMP BOSS) - 056 9162484 - Badge 17268 - NIGERIA
+2. SUMAN HAOLADAR (CLEANER) - 056-1680364 - INDIA
+3. PROBIR (SALAD MAKER) - 056-2952464 - BANGLADESH
+4. Waqas (LAUNDRY MAN) - 056-2242925 - PAKISTAN
+5. AMIT SAHU (ASIAN NIGHT) - 054 2430326 - INDIA
+6. ABHIJT GHOSH (ASIAN COOK) - 054-3958105 - INDIA
+7. GURPREET (PASTRY MAN) - 050 8816454 - INDIA
+8. GANGA PRASAD (ROOMBOY) - 054-5791554 - NEPAL
+9. AHMED YASEER (CHIEF COOK) - 050-1080691 - EGYPT
+10. PALASH DEY (WAITER) - 056 2836897 - INDIA
+11. SAWKAT ALAM (SALAD MAKER) - 054 3614150 - BANGLADESH
+12. BIRENDA (ROOMBOY) - 056 642 0164 - NEPAL
+13. MAHENDRA SINGH (CHAPATI MAKER) - 052 4673416 - INDIA
+14. Umesh Gurung (RIG WAITER) - 056 8960721 - NEPAL
+15. AKASH SYNAGBO (STORE KEEPER) - 052 7484269 - NEPAL
+16. MD NOOR ALAM (CLEANER) - 055-1274120 - BANGLADESH
+17. SHYMAL (ARABIC COOK) - 056-6428187 - BANGLADESH
+18. BHUMAIAH (ROOMBOY) - 050-9790529 - INDIA
+19. MOHAMMAD SHAHZAIB (FOOD DRIVER) - 056-8281782 - PAKISTAN
+20. LIL BAHADUR (NIGHT MESS WAITER) - 054-3007422 - NEPAL
+21. MAN BAHADUR (ASST ARAB COOK) - 054 5954697 - NEPAL
 
-const KNOWLEDGE = {
-  greeting: `Welcome to Ncth AI bot how may help you please\n\nType:\n- mess timing\n- menu\n- laundry\n- campboss number\n- room boy`,
-  mess: `The mess hall time is as follow:\n\nBreakfast (4:30am till 7:30am)\nLunch (10:30am till 1:30pm)\nDinner (4:30pm till 7:30pm)\n\nPlease ensure when coming to the mess dirty coveralls and short above the knees are not allowed, Avoid tops that reveals the armpits.`,
-  laundry: `Laundry timing:\n\nPicks at 10am, 11am and returns at 10am, 11am.\nPicks at 3pm, 4pm and returns 8pm.\n\nFor any doubt please contact the campboss\n0567974819 / 0569162484`,
-  campboss: `Campboss numbers:\n0567974819\n0569162484\nYou can reach him through whatsapp as well on the second number.`,
-  roomBoy: `Thanks for contacting, please specify your room number and the campboss will be notified immediately\n\nExample: Room 105 need cleaning`,
-  menuWeek: `*WEEKLY MENU - NCTH CAMP*\n\nSunday: Chicken Lasooni + Rice + Dal\nMonday: Chicken Dum Briyani\nTuesday - BBQ NIGHT: Shawarma, Kofta, Grilled Prawns\nWednesday: Chicken 65 + Rice\nThursday: Chicken Fried Rice\nFriday: Chicken Biryani Special\nSaturday: Chicken Curry + Dal\n\nType "today menu" for today's menu`
-}
+FIRE TEAM DAY: MICHAEL 056-9162484, DHEREJ 054-7540978, AHMED 050-1080691
+FIRE TEAM NIGHT: AMIT 054-2430326, PROBIR 056-2952464, GURPREET 050 8816454`;
 
-function getTodayMenu(){
-  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-  const today=days[new Date().getDay()]
-  const menus={
-    'Sunday':'Today (Sunday): Chicken Lasooni / Dinner: Chicken Curry',
-    'Monday':'Today (Monday): Chicken Dum Biryani / Egg Curry',
-    'Tuesday':'Today is TUESDAY - BBQ NIGHT! Shawarma, Kofta, Prawns',
-    'Wednesday':'Today (Wednesday): Chicken 65 / Mutton Curry',
-    'Thursday':'Today (Thursday): Chicken Fried Rice / Fish Curry',
-    'Friday':'Today (Friday): Chicken Biryani Special',
-    'Saturday':'Today (Saturday): Chicken Curry + Dal / Mutton Biryani'
-  }
-  return menus[today]+"\n\n"+KNOWLEDGE.menuWeek
-}
-
-function matchIntent(text){
-  const t=text.toLowerCase().trim()
-  if(/^(hi|hello|hey|salam)/i.test(t) || t.length<4) return 'greeting'
-  if(/(mess|mes+|mash|breakfast|lunch|dinner|mess hall)/i.test(t)) return 'mess'
-  if(/(laundry|londry|landry|laundary|cloth|washing|kapda)/i.test(t)) return 'laundry'
-  if(/(campboss|camp boss|boss number|manager)/i.test(t)) return 'campboss'
-  if(/(room boy|room service|clean.*room|room.*clean)/i.test(t)) return 'roomBoy'
-  if(/(menu|today.*food|food.*today|khana|bbq)/i.test(t)) return 'menu'
-  if(/room\s*\d+/i.test(t)) return 'roomBoyWithNumber'
-  return 'unknown'
-}
-
-async function startBot(){
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info')
-  const sock = makeWASocket({ auth: state, logger: P({ level: 'silent' }), printQRInTerminal:false, browser:['NCTH','Chrome','1.0'] })
-  sock.ev.on('creds.update', saveCreds)
-  sock.ev.on('connection.update', async (update)=>{
-    const { connection, lastDisconnect, qr } = update
-    if(qr){ qrCodeData=qr }
-    if(connection==='close'){
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut
-      if(shouldReconnect) startBot()
-      else isConnected=false
-    } else if(connection==='open'){ isConnected=true; qrCodeData='' }
-  })
-  sock.ev.on('messages.upsert', async ({ messages })=>{
-    for(const msg of messages){
-      if(!msg.message || msg.key.fromMe) continue
-      const from=msg.key.remoteJid
-      const text=msg.message.conversation || msg.message.extendedTextMessage?.text || ''
-      if(!text) continue
-      const intent=matchIntent(text)
-      let reply=''
-      if(intent==='greeting') reply=KNOWLEDGE.greeting
-      else if(intent==='mess') reply=KNOWLEDGE.mess
-      else if(intent==='laundry') reply=KNOWLEDGE.laundry
-      else if(intent==='campboss') reply=KNOWLEDGE.campboss
-      else if(intent==='roomBoy') reply=KNOWLEDGE.roomBoy
-      else if(intent==='roomBoyWithNumber') reply=`Noted! ${text}\nCampboss notified. Boy will come.\n${KNOWLEDGE.campboss}`
-      else if(intent==='menu') reply=/today/i.test(text)?getTodayMenu():KNOWLEDGE.menuWeek
-      else reply=`Sorry, I didn't understand.\nI can help with:\n- Mess timing\n- Today's menu\n- Laundry timing\n- Campboss number\n- Room boy\n\n${KNOWLEDGE.campboss}`
-      await sock.sendMessage(from, { text: reply })
-    }
-  })
-}
-startBot()
-
-app.get('/', async (req,res)=>{
-  if(isConnected){ res.send('<h1>✅ NCTH Bot LIVE on 0569162484</h1>') }
-  else if(qrCodeData){
-    const qrImage=await QRCode.toDataURL(qrCodeData)
-    res.send(`<html><body style="text-align:center;font-family:Arial;padding:20px"><h1>NCTH Camp Bot - Scan with 0569162484</h1><p>WhatsApp > Linked Devices > Link a Device > Scan</p><img src="${qrImage}" style="width:300px"/><p>Refresh if QR expires</p></body></html>`)
-  } else { res.send('<h1>Starting... Refresh 5 sec</h1><script>setTimeout(()=>location.reload(),5000)</script>') }
-})
-app.listen(PORT, ()=>console.log('Server '+PORT))
+const contractFull = `📄 *AD-187 - FULL ADNOC CONTRACT*
+*1. FOOD BRAND LIST (Page 167)* - Rice Basmati 1121: Sinnara Original, India Gate, Zeeba, Wadi Al Aseel, Al Hakim XXL (UAE Brand for ICV) - Flour: Grand Mills, Pills Burry, Al Baker, Jenan (UAE) - Milk: Al Ain, Al Marai, Lacnor, Al Rawabi - All HALAL Islamic compliant - UAE Local Content for ICV - Spec H-11-B2
+*2. MANNING (Annexure 11 Page 240)* - Contractor Manning Proposals Framework Agreement - All staff badges medical safety training - Uniform white 2x daily PPE - Camp Boss 24/7 056 9162484 - 21 staff
+*3. RESTAURANT RULES (Page 90)* - Clean after each meal - After hours meals with SITE REP approval NO extra charge - VIP menu NO extra charge - Halal - Uniform white 2x daily PPE - Table Setup: Knife Fork Spoon Dessert Spoon/Fork Soup Spoon Water glass Napkin holders Placemats Cruet set (salt pepper oil vinegar toothpick) 2-ply napkins mint toothpicks - 4 weekly menus submitted 2 weeks advance
+*4. SAMPLE BREAKFAST (Page 137)* - Contractor A: 1 Juice, Hot & Cold Milk, 1 Cereal + Oats, Full & Low fat Yoghurt, Honey Jam Butter, 3 Bakery (White/Brown Arabic + extra), 2 Veg Cut, 2 Cheese + Labneh, Main 2 Arabic Foul FalaFel + 1 Asian Sambar/Chutney + 1 Continental + Boiled/Scrambled/Fried Eggs + Steamed Rice, 3 Condiments, Tea/Coffee/Horlicks - Contractor B: 2 Juices, Milk, Jam Butter Cheese, 3 Bakery (Arabic Chapathi/Paratha B&W), 3 Veg Cut, Main 2 types + Boiled Eggs White Rice 4 Condiments 1 Whole Fruit`;const menu = {
+  saturday: { breakfast: "Grape Fruit Juice HOT & COLD MILK Oats/Corn Flakes Yoghurt Honey jam butter Bread White&Brown Arabic Tomato Onion Cucumber THREE CHEESE Foul Mudammas FalaFel Mixed Sabji Moong dal Sambar Chutney Boiled/scrambled/fried egg Steamed Rice French Toast Baked Beans Grilled Veg Hasbrow", lunch: "ASSORTED SALADS Olives Pickles Papadum arabic salona GRILLED FISH CHICKEN ZURBIAN Beef Stew Butter Chicken Hyderabadi Baingan Moong Dal Fry Motta Rice/Dahi Curry Steamed Rice THREE SWEETS Chapati Fruits Juices", dinner: "sweet corn soup beef mortdella Tomato Wedge Cucumber Lettuce Lemon Carrot Hammous Fusli Olive Tabula arabic rice BEEF STROGOFF fish fry chicken korma Veg Jalfraizee Masour dal Mota Rice White Rice" },
+  sunday: { breakfast: "Cocktail Foul Mudammas FalaFel Mix Bhaji Channa Masala Chicken Liver Masala Spicy Red Chutney Boiled Eggs Steamed Rice French Toast Baked Beans Grilled Veg Hasbrow", lunch: "chicken mulukhiya LAMB MANDI gulash Adobo Chicken Kerala Mackerel Fish Aloo Bindi Chana Dal Motta Rice/Rasam", dinner: "chickpeas soup luncheon meat MAJBOUS RICE BEEF STEW CHICKEN FINGER Keema mutter/parotho Veg Kolhapuri Dal Fry" },
+  monday: { breakfast: "Guava Foul Mudammas FalaFel Veg Kurma/Mutton Keema Mutter Tomato Chutney Hot & Spicy Sauce Boiled Eggs Steamed Rice", lunch: "spinach salona chicken sumac vermicelli rice BEEF PAKSIW Fish Biryani Kabuli Chana Dal Maharani Motta Rice/Sambar", dinner: "broccoli soup salami saffron rice CHICKEN ZATER CHICKEN CASSAROLE FISH CURRY Red Pumpkin Chana Dal" },
+  tuesday: { breakfast: "Apple Foul Mudammas FalaFel Dosa Aloo Mutter Sambar Chutney Boiled Eggs Steamed Rice", lunch: "okra salona jasheed Arabic Rice beef vegetable chicken achari Cabbage Thoran Moong Dal Fry Motta Rice/Dahi", dinner: "lentil soup chicken mandi foul falafel fish masturd sauce beef do pyaza aloo bhigon channa dal" },
+  wednesday: { breakfast: "Grape Fruit Foul Mudammas FalaFel Dal Kichadi White Channa Masala Grilled sausage Masala Spicy tomato Chutney", lunch: "cut beans salona Chicken Maqlouba macaroni baschamel CHICKEN NASHIF Andhra Sardine Fish Coconut White Pumpkin Panchratan Dal Tadka Motta Rice/Rasam", dinner: "beef gulash soup chicken kabsa Beef Shakriya pizza Fish Masala Aloo Palak Mix Dal" },
+  thursday: { breakfast: "Cocktail Foul Mudammas FalaFel Veg Kichadi Moong Whole Masala Sambar Spicy Chutney", lunch: "Black Beans salona Sea Food tajin chicken Kabsa Beef Roast Garlic chicken fri indian style Black Chana Masala Toor Dal Tadka Motta Rice", dinner: "moroccan lamb lentil soup mujaidra rice Chicken Escalope lahm nashif chicken KHURMA Snake Gourd Dal Fry" },
+  friday: { breakfast: "Guava Foul Mudammas FalaFel Rava Upma Dal Mix Bhaji Chicken Masala Spicy Tomato Chutney", lunch: "Potato Salona moroccan chicken dollma CHICKEN FINGER chicken biryani/veg biryani Yam Black Beans Masala Dal Masala Fry Motta Rice", dinner: "shilfish soup leeks turmeric chicken mortdella Veg Rice chicken roast Fresh Veg Fish mashwai CHICKEN ACHARI Tapioka Green Moong Dal" }
+};
+function getTodayMenu(){const days=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];const today=days[new Date().getDay()];const m=menu[today];return `🍽️ *TODAY ${today.toUpperCase()} - 4th WEEK SEPT 2026*\\n📍 BIDA AL OSHANEH\\n\\n*BREAKFAST:* ${m.breakfast}\\n\\n*LUNCH:* ${m.lunch}\\n\\n*DINNER:* ${m.dinner}\\n\\nType *staff list* | *contract* | *week menu*`;}
+async function startBot(){const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');const sock = makeWASocket({ auth: state, printQRInTerminal: true });sock.ev.on('creds.update', saveCreds);sock.ev.on('connection.update', (u)=>{const { connection, lastDisconnect }=u;if(connection==='close' && lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut) startBot(); else if(connection==='open') console.log('✅ BOT LIVE FULL CONTRACT');});sock.ev.on('messages.upsert', async ({ messages })=>{const msg=messages[0];if(!msg.message || msg.key.fromMe) return;const text=msg.message.conversation || msg.message.extendedTextMessage?.text || "";const lower=text.toLowerCase().trim();const from=msg.key.remoteJid;let reply="";if(['hi','hello','hey','salam'].includes(lower) || lower.startsWith('hi ') || lower.startsWith('hello')){reply=`👋 *AD-187 NCTH CAMP BOT - FULL VERSION*\\n📍 BIDA AL OSHANEH - 4th WEEK SEPT 2026\\n\\n🍽️ *today menu*\\n📅 *week menu*\\n👷 *staff list* - 21 staff\\n📄 *contract* - Full ADNOC contract\\n🏷️ *food brands* - Approved brands\\n📋 *adnoc rules* - Restaurant rules\\n👨‍🍳 *manning* - Manning req\\n🍳 *sample menu* - ADNOC standard\\n🔥 *fire team*\\n🏕️ *campboss* - 056 9162484\\n👕 *laundry* - 056-2242925\\n\\nEx: *Monday lunch* / *contract*`; }else if(lower.includes('today')) reply=getTodayMenu(); else if(lower.includes('staff') || lower.includes('contact')) reply=staffList; else if(lower.includes('contract')) reply=contractFull; else if(lower.includes('food brand') || lower.includes('brand list')) reply=`🏷️ *APPROVED FOOD BRANDS (Page 167)*\\nRice Basmati 1121: Sinnara Original India Gate Zeeba Wadi Al Aseel Al Hakim XXL (UAE ICV) Flour: Grand Mills Pills Burry Al Baker Jenan Milk: Al Ain Al Marai Lacnor Al Rawabi All Halal UAE Local ICV Spec H-11-B2`; else if(lower.includes('adnoc rule') || lower.includes('restaurant rule')) reply=`📋 *RESTAURANT RULES (Page 90)*\\nClean after each meal After hours with SITE REP approval NO extra charge VIP menu NO extra charge Halal Uniform white 2x daily PPE Table Setup Knife Fork Spoon Dessert Spoon/Fork Soup Spoon Water glass Napkin holders Placemats Cruet set 2-ply napkins mint toothpicks 4 weekly menus 2 weeks advance`; else if(lower.includes('manning')) reply=`👨‍🍳 *MANNING (Annexure 11 Page 240)*\\nContractor Manning Proposals Framework Agreement Personnel initial mobilization All staff ADNOC badges medical safety Uniform white 2x daily PPE Camp Boss 24/7 056 9162484 Current 21 staff`; else if(lower.includes('sample menu')) reply=`🍳 *SAMPLE BREAKFAST (Page 137)*\\nContractor A: 1 Juice Hot & Cold Milk 1 Cereal + Oats Full & Low fat Yoghurt Honey Jam Butter 3 Bakery White/Brown Arabic + extra 2 Veg Cut 2 Cheese + Labneh Main 2 Arabic Foul FalaFel + 1 Asian Sambar/Chutney + 1 Continental + Boiled/Scrambled/Fried Eggs + Steamed Rice 3 Condiments Tea/Coffee/Horlicks`; else if(lower.includes('fire')) reply=`🔥 *FIRE TEAM AD-187*\\nDAY: MICHAEL 056-9162484 DHEREJ 054-7540978 AHMED 050-1080691\\nNIGHT: AMIT 054-2430326 PROBIR 056-2952464 GURPREET 050 8816454`; else if(lower.includes('campboss')) reply=`🏕️ CAMP BOSS MICHAEL - 056 9162484 Badge 17268 NIGERIA`; else if(lower.includes('laundry')) reply=`👕 LAUNDRY Waqas - 056-2242925 PAKISTAN`; else if(lower.includes('week menu') || lower==='menu') reply=`📅 *4th WEEK SEPT MENU*\\nSend: *today menu*, *saturday breakfast*, *sunday lunch*, *monday dinner* etc\\n*staff list* | *contract* | *food brands* | *adnoc rules*`; else {const days=['saturday','sunday','monday','tuesday','wednesday','thursday','friday'];const meals=['breakfast','lunch','dinner'];let d=days.find(x=>lower.includes(x));let m=meals.find(x=>lower.includes(x));if(d && m && menu[d]) reply=`🍽️ *${d.toUpperCase()} ${m.toUpperCase()} - 4th WEEK SEPT 2026*\\n\\n${menu[d][m]}`; else if(d && menu[d]) reply=`🍽️ *${d.toUpperCase()} FULL MENU*\\n\\nBREAKFAST: ${menu[d].breakfast}\\n\\nLUNCH: ${menu[d].lunch}\\n\\nDINNER: ${menu[d].dinner}`; else reply=`🤔 Try *today menu* or *staff list* or *contract* or *Monday lunch*\\nType *week menu* for help`; }if(reply) await sock.sendMessage(from, { text: reply });});}
+const expressApp = express();
+expressApp.get('/', (req,res)=>res.send('<h1>AD-187 BOT LIVE ✅ FULL CONTRACT + 21 Staff + 4th Week Menu</h1><p>Bot: 056 9162484</p><p>Commands: today menu, staff list, contract, food brands, adnoc rules, manning, sample menu</p>'));
+expressApp.listen(PORT, ()=>console.log('Server',PORT));
+startBot();
