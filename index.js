@@ -49,7 +49,7 @@ const menu = {
 function getTodayMenu(){const days=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];const today=days[new Date().getDay()];const m=menu[today];return `🍽️ *TODAY ${today.toUpperCase()} - 4th WEEK SEPT 2026*\\n${m.breakfast}\\n\\nLUNCH: ${m.lunch}\\n\\nDINNER: ${m.dinner}`;}
 
 async function startBot() {
-  const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
+  const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys2');
 
   const sock = makeWASocket({
     auth: state,
